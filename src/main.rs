@@ -13,36 +13,50 @@ fn main() -> Result<()> {
     let (old_game_info, new_game_info) = parse_game_info()?;
     let old_songs = song_info_map(list_song_info(old_game_info));
     let new_songs = song_info_map(list_song_info(new_game_info));
-    for (name, new_info) in map_diff(&old_songs, &new_songs) {
-        if let Some(old_info) = old_songs.get(name) {
-            println!("name: {name}");
-            let old_levels = BeatmapInfo::from(old_info.clone())
-                .levels
-                .into_iter()
-                .map(|l| (l.name.clone(), l))
-                .collect();
-            let new_levels = BeatmapInfo::from(new_info.clone())
-                .levels
-                .into_iter()
-                .map(|l| (l.name.clone(), l))
-                .collect();
-            for (level_name, new_level) in map_diff(&old_levels, &new_levels) {
-                if let Some(old_level) = old_levels.get(level_name) {
-                    println!(
-                        "{level_name}: {} -> {}",
-                        old_level.difficulty, new_level.difficulty
-                    );
+    let (changed_maps, new_maps): (Vec<_>, Vec<_>) =
+        map_diff(&old_songs, &new_songs).partition(|s| old_songs.contains_key(s.0));
+
+    for (name, new_info) in changed_maps {
+        let old_info = &old_songs[name];
+        println!("name: {name}");
+        let old_levels = BeatmapInfo::from(old_info.clone())
+            .levels
+            .into_iter()
+            .map(|l| (l.name.clone(), l))
+            .collect();
+        let new_levels = BeatmapInfo::from(new_info.clone())
+            .levels
+            .into_iter()
+            .map(|l| (l.name.clone(), l))
+            .collect();
+
+        for (level_name, new_level) in map_diff(&old_levels, &new_levels) {
+            let Some(old_level) = old_levels.get(level_name) else {
+                println!("* {level_name}: {}", new_level.difficulty);
+                continue;
+            };
+
+            let old_diffi = old_level.difficulty;
+            let new_diffi = new_level.difficulty;
+            println!(
+                "{level_name}: {} -> {} ({:+})",
+                old_diffi,
+                new_diffi,
+                if (new_diffi - old_diffi).is_sign_positive() {
+                    '+'
                 } else {
-                    println!("* {level_name}: {}", new_level.difficulty);
-                }
-            }
-        } else {
-            println!("* name: {name}");
-            for Level { name, difficulty } in BeatmapInfo::from(new_info.clone()).levels {
-                println!("{name}: {difficulty}");
-            }
+                    '-'
+                },
+            );
         }
         println!();
+    }
+
+    for (name, new_info) in new_maps {
+        println!("* name: {name}");
+        for Level { name, difficulty } in BeatmapInfo::from(new_info.clone()).levels {
+            println!("{name}: {difficulty}");
+        }
     }
     Ok(())
 }
