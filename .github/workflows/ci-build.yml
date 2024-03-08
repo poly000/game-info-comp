@@ -1,0 +1,81 @@
+# Origin config by @Kilerd
+
+name: Build Canary Version
+
+on:
+  push:
+    tags:
+      - v*
+
+jobs:
+  release:
+    name: Release on ${{ matrix.platform }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        platform: [macos-x86_64, linux_glibc-x86_64, linux_musl-x86_64, linux_musl-i686,  windows-i686, windows-x86_64]
+        include:
+        
+          - platform: macos-x86_64
+            target: x86_64-apple-darwin
+            os: macos-latest
+            bin: game-info-comp
+
+          - platform: linux_glibc-x86_64
+            target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            bin: game-info-comp
+            
+          - platform: linux_musl-x86_64
+            target: x86_64-unknown-linux-musl
+            os: ubuntu-latest
+            bin: game-info-comp
+        
+          - platform: linux_musl-i686
+            target: i686-unknown-linux-musl
+            os: ubuntu-latest
+            bin: game-info-comp
+            
+          - platform: windows-i686
+            target: i686-pc-windows-msvc
+            os: windows-latest
+            bin: game-info-comp.exe
+            
+          - platform: windows-x86_64
+            target: x86_64-pc-windows-msvc
+            os: windows-latest
+            bin: game-info-comp.exe
+            
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+          toolchain: stable
+
+      - name: Build executable
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Prepare assets
+        shell: bash
+        run: |
+          mv target/${{ matrix.target }}/release/${{ matrix.bin }} .          
+          tar -cvf ${{ matrix.target }}.tar LICENSE ${{ matrix.bin }}
+        
+      - name: Declare some variables # https://stackoverflow.com/a/61699863
+        id: vars
+        shell: bash
+        run: |
+          target_ver=$(cargo metadata --format-version 1 --no-deps | sed -r 's/.*"version":"([^"]*)".*/\1/')
+          echo "target_ver=${target_ver}" >> $GITHUB_OUTPUT
+
+      - name: Pre-Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: ${{ matrix.target }}.tar
+          tag_name: v${{ steps.vars.outputs.target_ver }}
+          prerelease: false
+          
+
